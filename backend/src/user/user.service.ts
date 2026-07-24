@@ -8,6 +8,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
+import { TtlCache } from '../common/ttl-cache';
 import { GithubProfileDto } from './dto/github-profile.dto';
 import { GithubSearchResultDto } from './dto/github-search-result.dto';
 
@@ -38,12 +39,45 @@ interface GithubSearchUsersResponse {
 const RATE_LIMIT_MESSAGE =
   'Se alcanzó el límite de peticiones a la API de GitHub. Intentá de nuevo en unos minutos.';
 
+// GitHub's unauthenticated limits are tight (60 req/hour for profiles, 10
+// req/min for search), so short-lived caches absorb bursts — e.g. several
+// visitors loading the same profile, or someone re-typing a search prefix.
+const PROFILE_CACHE_TTL_MS = 60_000;
+const SEARCH_CACHE_TTL_MS = 30_000;
+
 @Injectable()
 export class UserService {
+  private readonly profileCache = new TtlCache<GithubProfileDto>(
+    PROFILE_CACHE_TTL_MS,
+  );
+  private readonly searchCache = new TtlCache<GithubSearchResultDto[]>(
+    SEARCH_CACHE_TTL_MS,
+  );
+
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {}
+
+  async getProfile(username: string): Promise<GithubProfileDto> {
+    const key = username.toLowerCase();
+    const cached = this.profileCache.get(key);
+    if (cached) return cached;
+
+    const profile = await this.fetchProfile(username);
+    this.profileCache.set(key, profile);
+    return profile;
+  }
+
+  async searchUsers(query: string): Promise<GithubSearchResultDto[]> {
+    const key = query.toLowerCase();
+    const cached = this.searchCache.get(key);
+    if (cached) return cached;
+
+    const results = await this.fetchSearchResults(query);
+    this.searchCache.set(key, results);
+    return results;
+  }
 
   private githubHeaders() {
     const token = this.configService.get<string>('GITHUB_TOKEN');
@@ -54,7 +88,7 @@ export class UserService {
     };
   }
 
-  async getProfile(username: string): Promise<GithubProfileDto> {
+  private async fetchProfile(username: string): Promise<GithubProfileDto> {
     try {
       const { data } = await firstValueFrom(
         this.httpService.get<GithubUserResponse>(
@@ -95,7 +129,9 @@ export class UserService {
     }
   }
 
-  async searchUsers(query: string): Promise<GithubSearchResultDto[]> {
+  private async fetchSearchResults(
+    query: string,
+  ): Promise<GithubSearchResultDto[]> {
     try {
       const { data } = await firstValueFrom(
         this.httpService.get<GithubSearchUsersResponse>(

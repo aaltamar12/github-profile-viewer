@@ -1,4 +1,5 @@
-import { TerminalHeader, Window } from "@/components/profile-window";
+import { TerminalHeader } from "@/components/terminal-header";
+import { Window } from "@/components/window";
 
 export function ProfileSkeleton({ username }: { username: string }) {
   return (

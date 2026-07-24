@@ -37,26 +37,3 @@ export function TerminalHeader({
     </div>
   );
 }
-
-export function Window({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="w-full max-w-[640px] animate-rise">
-      <div className="rounded-lg border border-hairline bg-paper-raised/40 overflow-hidden">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-export function Stat({ value, label }: { value: number; label: string }) {
-  return (
-    <div>
-      <div className="font-display text-[26px] leading-none tabular-nums">
-        {value.toLocaleString("es")}
-      </div>
-      <div className="mt-2 text-[10.5px] uppercase tracking-[0.1em] text-ink-faint">
-        {label}
-      </div>
-    </div>
-  );
-}

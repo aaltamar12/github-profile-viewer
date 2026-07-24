@@ -1,113 +1,36 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { searchGithubUsers, type GithubSearchResult } from "@/lib/github";
+import { useDebouncedUserSearch } from "@/hooks/use-debounced-user-search";
+import { useOnClickOutside } from "@/hooks/use-on-click-outside";
+import { useSlashToFocus } from "@/hooks/use-slash-to-focus";
 
 export function SearchBox() {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const cacheRef = useRef(new Map<string, GithubSearchResult[]>());
-  const abortRef = useRef<AbortController | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [results, setResults] = useState<GithubSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
-  function handleQueryChange(value: string) {
+  const { results, loading, error, search } = useDebouncedUserSearch();
+
+  useSlashToFocus(inputRef);
+  useOnClickOutside(containerRef, () => setOpen(false));
+
+  function handleChange(value: string) {
     setQuery(value);
     setOpen(true);
     setSelectedIndex(-1);
-
-    const trimmed = value.trim();
-    if (trimmed.length < 3) {
-      setResults([]);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-
-    const cached = cacheRef.current.get(trimmed);
-    if (cached) {
-      setResults(cached);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-
-    setError(null);
-    setLoading(true);
+    search(value);
   }
-
-  // Only schedules and performs the debounced network call; the "too short"
-  // and "cached" cases are resolved synchronously in handleQueryChange above,
-  // since setting state directly from an effect body causes an extra render.
-  useEffect(() => {
-    const trimmed = query.trim();
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    if (trimmed.length < 3 || cacheRef.current.has(trimmed)) {
-      return;
-    }
-
-    debounceRef.current = setTimeout(() => {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      searchGithubUsers(trimmed, controller.signal)
-        .then((data) => {
-          cacheRef.current.set(trimmed, data);
-          setResults(data);
-          setLoading(false);
-        })
-        .catch((err: Error) => {
-          if (err.name === "AbortError") return;
-          setError(err.message);
-          setLoading(false);
-        });
-    }, 400);
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query]);
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
-      if (e.key === "/" && tag !== "input" && tag !== "textarea") {
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
-  useEffect(() => {
-    function onMouseDown(e: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, []);
 
   function select(login: string) {
     setOpen(false);
     setQuery("");
-    setResults([]);
+    search("");
     inputRef.current?.blur();
     router.push(`/${login}`);
   }
@@ -142,7 +65,7 @@ export function SearchBox() {
         <input
           ref={inputRef}
           value={query}
-          onChange={(e) => handleQueryChange(e.target.value)}
+          onChange={(e) => handleChange(e.target.value)}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder="buscar otro perfil de GitHub…"

@@ -1,8 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import { getGithubProfile, type GithubProfile } from "@/lib/github";
+import { getGithubProfile } from "@/lib/github/server";
+import type { GithubProfile } from "@/lib/github/types";
 import { DEFAULT_USERNAME } from "@/lib/constants";
-import { TerminalHeader, Window, Stat } from "@/components/profile-window";
+import { TerminalHeader } from "@/components/terminal-header";
+import { Window } from "@/components/window";
+import { Stat } from "@/components/stat";
+import { formatUrl, normalizeUrl } from "@/lib/format-url";
 
 export async function ProfileRoute({ username }: { username: string }) {
   const result = await getGithubProfile(username);
@@ -133,12 +137,4 @@ function ErrorBody({ message, status }: { message: string; status: number }) {
       </p>
     </div>
   );
-}
-
-function formatUrl(url: string) {
-  return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
-}
-
-function normalizeUrl(url: string) {
-  return /^https?:\/\//.test(url) ? url : `https://${url}`;
 }
