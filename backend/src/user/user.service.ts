@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
 import { GithubProfileDto } from './dto/github-profile.dto';
+import { GithubSearchResultDto } from './dto/github-search-result.dto';
 
 interface GithubUserResponse {
   login: string;
@@ -26,6 +27,17 @@ interface GithubUserResponse {
   created_at: string;
 }
 
+interface GithubSearchUsersResponse {
+  items: {
+    login: string;
+    avatar_url: string;
+    html_url: string;
+  }[];
+}
+
+const RATE_LIMIT_MESSAGE =
+  'Se alcanzó el límite de peticiones a la API de GitHub. Intentá de nuevo en unos minutos.';
+
 @Injectable()
 export class UserService {
   constructor(
@@ -33,20 +45,21 @@ export class UserService {
     private readonly configService: ConfigService,
   ) {}
 
-  async getProfile(username: string): Promise<GithubProfileDto> {
+  private githubHeaders() {
     const token = this.configService.get<string>('GITHUB_TOKEN');
+    return {
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }
 
+  async getProfile(username: string): Promise<GithubProfileDto> {
     try {
       const { data } = await firstValueFrom(
         this.httpService.get<GithubUserResponse>(
           `https://api.github.com/users/${encodeURIComponent(username)}`,
-          {
-            headers: {
-              Accept: 'application/vnd.github+json',
-              'X-GitHub-Api-Version': '2022-11-28',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-          },
+          { headers: this.githubHeaders() },
         ),
       );
 
@@ -73,14 +86,38 @@ export class UserService {
           );
         }
         if (error.response?.status === 403) {
-          throw new HttpException(
-            'Se alcanzó el límite de peticiones a la API de GitHub. Intentá de nuevo en unos minutos.',
-            429,
-          );
+          throw new HttpException(RATE_LIMIT_MESSAGE, 429);
         }
       }
       throw new InternalServerErrorException(
         'No se pudo obtener el perfil de GitHub en este momento.',
+      );
+    }
+  }
+
+  async searchUsers(query: string): Promise<GithubSearchResultDto[]> {
+    try {
+      const { data } = await firstValueFrom(
+        this.httpService.get<GithubSearchUsersResponse>(
+          'https://api.github.com/search/users',
+          {
+            headers: this.githubHeaders(),
+            params: { q: `${query} in:login`, per_page: 6 },
+          },
+        ),
+      );
+
+      return data.items.map((item) => ({
+        login: item.login,
+        avatarUrl: item.avatar_url,
+        htmlUrl: item.html_url,
+      }));
+    } catch (error) {
+      if (error instanceof AxiosError && error.response?.status === 403) {
+        throw new HttpException(RATE_LIMIT_MESSAGE, 429);
+      }
+      throw new InternalServerErrorException(
+        'No se pudo buscar usuarios en este momento.',
       );
     }
   }

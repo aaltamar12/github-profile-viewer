@@ -18,7 +18,14 @@ export type GithubProfileResult =
   | { ok: true; data: GithubProfile }
   | { ok: false; status: number; message: string };
 
+export interface GithubSearchResult {
+  login: string;
+  avatarUrl: string;
+  htmlUrl: string;
+}
+
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:4000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export async function getGithubProfile(
   username: string,
@@ -50,4 +57,24 @@ export async function getGithubProfile(
         "No se pudo conectar con el backend. Puede estar despertando de un estado inactivo, intentá de nuevo en unos segundos.",
     };
   }
+}
+
+export async function searchGithubUsers(
+  query: string,
+  signal?: AbortSignal,
+): Promise<GithubSearchResult[]> {
+  const res = await fetch(
+    `${API_URL}/user/search?q=${encodeURIComponent(query)}`,
+    { signal },
+  );
+
+  if (!res.ok) {
+    throw new Error(
+      res.status === 429
+        ? "Límite de búsquedas alcanzado, esperá un momento."
+        : "No se pudo buscar usuarios.",
+    );
+  }
+
+  return res.json() as Promise<GithubSearchResult[]>;
 }
