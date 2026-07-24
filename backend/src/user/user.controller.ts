@@ -9,7 +9,7 @@ export class UserController {
 
   @Get('search')
   search(@Query('q') query?: string): Promise<GithubSearchResultDto[]> {
-    if (!query || query.trim().length < 2) {
+    if (!query || query.trim().length < 3) {
       return Promise.resolve([]);
     }
     return this.userService.searchUsers(query.trim());

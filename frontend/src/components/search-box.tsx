@@ -25,7 +25,7 @@ export function SearchBox() {
     setSelectedIndex(-1);
 
     const trimmed = value.trim();
-    if (trimmed.length < 2) {
+    if (trimmed.length < 3) {
       setResults([]);
       setError(null);
       setLoading(false);
@@ -52,7 +52,7 @@ export function SearchBox() {
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    if (trimmed.length < 2 || cacheRef.current.has(trimmed)) {
+    if (trimmed.length < 3 || cacheRef.current.has(trimmed)) {
       return;
     }
 
@@ -133,7 +133,7 @@ export function SearchBox() {
   }
 
   const trimmed = query.trim();
-  const showDropdown = open && trimmed.length >= 2;
+  const showDropdown = open && trimmed.length >= 3;
 
   return (
     <div ref={containerRef} className="relative">
